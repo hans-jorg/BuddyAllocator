@@ -14,16 +14,14 @@
  *
  *  @note
  *    All blocks at a level n can be found between in the range
- *       \f$ 2^n-1 \f$ to \f$ 2^{n+1}-2 \f$
+ *         2^n - 1 to  2^{n+1}-2
  *
  *  @note
  *    To find the ancestor of a node k, subtract 1 and divide by 2, i.e.
- *       \f[
- *           antecessor(k) = \frac{k-1}{2}
- *       \f]
+ *             antecessor(k) = {k-1} over {2}
  *
  *  @note
- *    To find the successor of a node k, calculate \f$ 2*k+1 \f$ and  \f$ 2*k + 2 \f$
+ *    To find the successor of a node k, calculate 2*k+1  and   2*k + 2
  *
  *  @note
  *    All right leaves have even indices and all left leaves are odd.
@@ -45,10 +43,6 @@
  *
  */
 
-#if defined(TEST) && !defined(DEBUG)
-#define DEBUG
-#endif
-
 #include <stdint.h>
 #ifdef DEBUG
 #include <stdio.h>
@@ -57,19 +51,15 @@
 
 
 #include "bitvector.h"
-
+#include "buddy.h"
 
 /**
- *  @brief  Size definition
+ *  @brief  Definition of map and tree size
 */
 ///@{
-#define TOTALSIZE   16384
-#define MINSIZE     1024
-#define BASE        0x1000000
 
-#define MAPSIZE        (TOTALSIZE/MINSIZE)
-
-const int msize = MAPSIZE;              ///< const can not be used for array dimensions
+#define MAPSIZE        (BUDDYTOTALSIZE/BUDDYMINSIZE)    ///< Number of blocks
+#define TREESIZE       (MAPSIZE*2)                      ///< Number of elements in the tree
 ///@}
 
 /**
@@ -85,10 +75,10 @@ BV_DECLARE(split,MAPSIZE*2);                 ///< already split
  */
 
 typedef struct {
-    int         level;
-    int         index;
-    int         size;
-    uint32_t    addr;
+    int         level;      ///< level of node
+    int         index;      ///< index of node
+    int         size;       ///< size of block
+    uint32_t    addr;       ///< address of block
 } nodeinfo;
 
 
@@ -98,10 +88,6 @@ typedef struct {
 void
 buddy_init(void) {
 
-#ifdef DEBUG
-    printf("Initialization for %d blocks\n",MAPSIZE);
-#endif
-
     bv_clearall(used,MAPSIZE*2);
     bv_clearall(split,MAPSIZE*2);
 }
@@ -109,7 +95,7 @@ buddy_init(void) {
 /**
  *  @brief  buddy_alloc
  */
-unsigned
+void *
 buddy_alloc(unsigned size) {
 int level;
 int s;
@@ -121,11 +107,8 @@ nodeinfo stack[MAPSIZE];
 int sp;
 nodeinfo node;
 
-#ifdef DEBUG
-    printf("Allocating an area for %d bytes\n",size);
-#endif
     // Too big?
-    if( size > TOTALSIZE )
+    if( size > BUDDYTOTALSIZE )
         return 0;
 
     // Already full
@@ -135,7 +118,7 @@ nodeinfo node;
     sp = 0;
     stack[sp].level = 0;
     stack[sp].index = 0;
-    stack[sp].size = TOTALSIZE;
+    stack[sp].size = BUDDYTOTALSIZE;
     stack[sp].addr = 0;
     sp++;
 
@@ -146,24 +129,17 @@ nodeinfo node;
         s = node.size;
         a = node.addr;
         l = node.level;
-#ifdef DEBUG
-        printf("Trying block #%1d at level %d with size %d and address %X\n",
-                k,l,s,a);
-#endif
 
         // test if block already used
         if( bv_test(used,k) )
             continue;
         // test if need full block
-        if( (size > s/2) || (s == MINSIZE) ) {
+        if( (size > s/2) || (s == BUDDYMINSIZE) ) {
             // if already split, try another block
             if( bv_test(split,k) == 0 ) {
                 // reserve it
                 bv_set(used,k);
-#ifdef DEBUG
-                printf("Allocated block #%1d at %X\n",k,a);
-#endif
-                return BASE+a;
+                return (void *) ((char *) BUDDYBASE+a);
             }
         }
         s /= 2;
@@ -195,32 +171,20 @@ static inline int iseven(int n) { return (n&1)^1; }
 /**
  *  @brief  buddy_free
  */
-void buddy_free(uint32_t addr) {
-uint32_t disp = addr - BASE;
+void buddy_free(void *addr) {
+uint32_t disp = (char *) addr - (char *)BUDDYBASE;       // 4 GB limit
 int b,d,k,p;
 
-#ifdef DEBUG
-    printf("Freeing block at %08X\n",addr);
-#endif
-    d = disp/MINSIZE;
+    d = disp/BUDDYMINSIZE;
 
     k = MAPSIZE+d-1;
-#ifdef DEBUG
-    printf("Found at low level block #%1d\n",k);
-#endif
     // Free if it is not
     bv_clear(used,k);
     bv_clear(split,k);
     // Find block to be freed
     while( k > 0 ) {
             k /= 2;
-#ifdef DEBUG
-            printf("Searching up block #%1d\n",k);
-#endif
         if( bv_test(used,k) ) {
-#ifdef DEBUG
-            printf("Freeing block #%1d\n",k);
-#endif
             bv_clear(used,k);
             bv_clear(split,k);
             break;
@@ -234,9 +198,6 @@ int b,d,k,p;
             b = k+1;
         else
             b = k-1;
-#ifdef DEBUG1
-        printf("Found buddy at block #%-1d\n",b);
-#endif
         if( (bv_test(used,k)==0)&&(bv_test(used,b)==0)&&(bv_test(split,k)==0)&&(bv_test(split,b))) {
             p = k/2;
             bv_clear(split,p);
@@ -285,7 +246,7 @@ nodeinfo node;
     sp = 0;
     stack[sp].level = 0;
     stack[sp].index = 0;
-    stack[sp].size = TOTALSIZE/MINSIZE;
+    stack[sp].size = BUDDYTOTALSIZE/BUDDYMINSIZE;
     stack[sp].addr = 0;
     sp++;
 
@@ -296,20 +257,10 @@ nodeinfo node;
         s = node.size;
         a = node.addr;
         l = node.level;
-#ifdef DEBUG1
-        printf("Mapping block #%1d at level %d with size %d and address 0x%X",
-                k,l,s,a);
-#endif
         // test if block already used
         if( bv_test(used,k) ) {
-#ifdef DEBUG1
-            printf("--> USED");
-#endif
             fillmap(m,a,a+s,'U');
         }
-#ifdef DEBUG1
-        putchar('\n');
-#endif
 
         if( s == 1 )
             continue;
@@ -355,11 +306,11 @@ uint32_t size;
 int delta;
 
     level = 0;
-    size = TOTALSIZE;
+    size = BUDDYTOTALSIZE;
     lim = 0;
     addr = 0;
     delta = 1;
-    for(k=0;k<MAPSIZE*2-1;k++) {
+    for(k=0;k<TREESIZE;k++) {
         printf("level = %-2d node = %-3d address = %08X  size=%08X\n",level,k,addr,size);
         if( k == lim ) {
             level++;
@@ -372,90 +323,6 @@ int delta;
             addr += size;
         }
     }
-}
-
-#endif
-
-#ifdef TEST
-
-/**
- *  @brief  test program
- */
-int
-main (int argc, char *argv[])
-{
-unsigned a;
-unsigned f1,f2,f3,f4;
-
-
-    printf("Total size = %d (%X)\n",TOTALSIZE,TOTALSIZE);
-    printf("Minimal size = %d (%X)\n",MINSIZE,MINSIZE);
-
-    printf("\nAddresses\n");
-    buddy_printaddresses();
-
-    printf("\nMap\n");
-    buddy_init();
-    buddy_printmap();
-
-    a = buddy_alloc(33000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-
-    a = buddy_alloc(15000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-
-#if 1
-    buddy_free(a);
-    buddy_printmap();
-#else
-    printf("\nResetting...\n");
-    buddy_init();
-#endif
-
-    a = buddy_alloc(4000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-    f1 = a;
-
-    a = buddy_alloc(1000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-    f3 = a;
-
-    a = buddy_alloc(1000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-    f4 = a;
-
-    a = buddy_alloc(1000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-    f2 = a;
-
-    a = buddy_alloc(4000);
-    printf("a=%08X\n",a);
-    buddy_printmap();
-
-    printf("\nFreeing...\n");
-
-    buddy_free(a);
-    buddy_printmap();
-
-    buddy_free(f1);
-    buddy_printmap();
-
-    buddy_free(f2);
-    buddy_printmap();
-
-    buddy_free(f3);
-    buddy_printmap();
-
-    buddy_free(f4);
-    buddy_printmap();
-
-    return 0;
 }
 
 #endif

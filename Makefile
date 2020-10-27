@@ -3,10 +3,11 @@
 #
 
 PROGNAME=testbuddy
-OBJS=buddy.o
+OBJS=buddy.o testbuddy.o
 
 CFLAGS+= -g
-CFLAGS+= -DTEST -DDEBUG -DBV_ENABLEMACROS
+CFLAGS+= -DTEST -DBV_ENABLEMACROS
+CFLAGS+= -DDEBUG
 #CFLAGS+= --save-temps
 
 
@@ -29,5 +30,6 @@ docs:
 	doxygen Doxyfile
 
 
-buddy.o: bitvector.h
+buddy.o: bitvector.h buddy.h
+testbuddy.o: bitvector.h buddy.h
 
