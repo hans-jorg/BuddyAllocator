@@ -1,5 +1,5 @@
-vectormaps
-=============================
+Buddy Allocator using Bit Vectors
+=================================
 
 ##Introduction
 
@@ -52,5 +52,6 @@ There is the alternative to use macros, that is enable by defining the preporces
 
 ##References
 [1]	???
+
 
 [2] Knuth, D.E. 
