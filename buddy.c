@@ -59,7 +59,7 @@
 ///@{
 
 #define MAPSIZE        (BUDDYTOTALSIZE/BUDDYMINSIZE)    ///< Number of blocks
-#define TREESIZE       (MAPSIZE*2)                      ///< Number of elements in the tree
+#define TREESIZE       (MAPSIZE*2-1)                    ///< Number of elements in the tree
 ///@}
 
 /**
