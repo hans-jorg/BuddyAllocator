@@ -213,7 +213,7 @@ int b,d,k,p;
 /**
  *  @brief  fillmap
  */
-void
+static void
 fillmap(char *m,int start, int end, char c) {
 int i;
 
@@ -230,7 +230,7 @@ int i;
 /**
  *  @brief  buildmap
  */
-void
+static void
 buildmap(char *m) {
 int level;
 int s;

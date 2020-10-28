@@ -31,8 +31,6 @@ void *buddy_alloc(unsigned size);
 void  buddy_free(void *addr);
 
 #ifdef DEBUG
-void fillmap(char *m, int start, int end, char c);
-void buildmap(char *m);
 void buddy_printmap(void);
 void buddy_printaddresses(void);
 #endif
