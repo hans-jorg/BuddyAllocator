@@ -17,9 +17,6 @@ char * a;
 char *f1,*f2,*f3,*f4;
 unsigned size;
 
-    printf("Total size = %d (%X)\n",BUDDYTOTALSIZE,BUDDYTOTALSIZE);
-    printf("Minimal size = %d (%X)\n",BUDDYMINSIZE,BUDDYMINSIZE);
-
     printf("\nAddresses\n");
     buddy_printaddresses();
 

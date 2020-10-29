@@ -59,6 +59,7 @@ There is the alternative to the inline routines: use macros. Thery are enable by
     BV_CLEAR(X,BIT)
     BV_TEST(X,BIT)
 
+
 ##References
 [1]	Kenneth C. Knowlton. A Fast storage allocator. Communications of the ACM 8(10):623–625, Oct 1965.
 

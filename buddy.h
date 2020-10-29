@@ -8,33 +8,28 @@
  */
 
 
-/**
- *  @brief  Size definition
-*/
-///@{
-/// Total size of area to be managed. Must be a power of 2
-#ifndef BUDDYTOTALSIZE
-#define BUDDYTOTALSIZE   16384
-#endif
-/// Minimal size of a block
-#ifndef BUDDYMINSIZE
-#define BUDDYMINSIZE     1024
-#endif
-/// Address of area to be managed
-#ifndef BUDDYBASE
-#define BUDDYBASE        0x1000000
-#endif
-///@}
+#include "bitvector.h"
 
-void  buddy_init(void);
-void *buddy_alloc(unsigned size);
-void  buddy_free(void *addr);
+/**
+ * Quantity of regions
+ */
+
+void  buddy_init_ex(int r);
+void *buddy_alloc_ex(int r, unsigned size);
+void  buddy_free_ex(int r, void *addr);
+
+static inline void buddy_init(void) { buddy_init_ex(0); }
+static inline void *buddy_alloc(unsigned size) { buddy_alloc_ex(0,size); }
+static inline void  buddy_free(void *addr) {buddy_free_ex(0,addr); }
+
+
 
 #ifdef DEBUG
-void fillmap(char *m, int start, int end, char c);
-void buildmap(char *m);
-void buddy_printmap(void);
-void buddy_printaddresses(void);
+void buddy_printmap_ex(int r);
+void buddy_printaddresses_ex(int r);
+static void inline buddy_printmap(void) { buddy_printmap_ex(0); }
+static void inline buddy_printaddresses(void) { buddy_printaddresses_ex(0); }
 #endif
+
 #endif
 

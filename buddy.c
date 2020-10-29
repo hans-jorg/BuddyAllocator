@@ -27,16 +27,16 @@
  *    All right leaves have even indices and all left leaves are odd.
  *
  *  @note
- *    The allocation is governed by two bits: used and split. The used bit set indicates that
- *    this block is full allocated. The split bit indicate that it has been split and allocation
+ *    The allocation is governed by two bits: region[r].used and region[r].split. The region[r].used bit set indicates that
+ *    this block is full allocated. The region[r].split bit indicate that it has been region[r].split and allocation
  *    is done further below.
  *
- *    When a block is used and its buddy too, the parent block used bit must be set.
+ *    When a block is region[r].used and its buddy too, the parent block region[r].used bit must be set.
  *
- *    When a block is set free and its buddy remains used, the parent block used bit must
+ *    When a block is set free and its buddy remains region[r].used, the parent block region[r].used bit must
  *      be cleared.
  *
- *    When a block is set free and its buddy is already free, the parent block split bit must
+ *    When a block is set free and its buddy is already free, the parent block region[r].split bit must
  *      be cleared.
  *
  *    By observing the two bits, one can determine its status.
@@ -54,24 +54,68 @@
 #include "buddy.h"
 
 /**
- *  @brief  Definition of map and tree size
+ *  @brief  Definition of default region (0)
 */
 ///@{
-
-#define MAPSIZE        (BUDDYTOTALSIZE/BUDDYMINSIZE)    ///< Number of blocks
-#define TREESIZE       (MAPSIZE*2-1)                    ///< Number of elements in the tree
+#define TOTALSIZE       8388608                         ///< Size of region = 8 MB
+#define MINSIZE         262144                          ///< Minimal block size = 1 KB
+#define MAPSIZE         (TOTALSIZE/MINSIZE)             ///< Number of blocks
+#define TREESIZE        (MAPSIZE*2-1)                   ///< Number of elements in the tree
+#define BASE            (0xC000000)
 ///@}
 
 /**
- *
+ *  @brief  Number of regions
+ */
+#define BUDDY_REGIONS_N 4
+
+/**
+ *  @brief  Structure to hold information about a region
+ */
+typedef struct {
+    uint32_t    totalsize;              //<
+    uint32_t    minsize;                //<
+    uint32_t    mapsize;                //<
+    uint32_t    treesize;               //<
+    BV_TYPE     *used;                   //<
+    BV_TYPE     *split;                  //<
+    void        *base;                  //<
+    char        *map;                   //<
+} BUDDY_REGION;
+
+
+/**
+ * Bit vectors region[r].used for the default region
  */
 ///@{
-BV_DECLARE(used,MAPSIZE*2);                  ///< used/free map
-BV_DECLARE(split,MAPSIZE*2);                 ///< already split
+BV_DECLARE(used,TREESIZE);                       ///< region[r].used/free map
+BV_DECLARE(split,TREESIZE);                      ///< already region[r].split
 ///@}
 
+///@{
+char map[MAPSIZE];
+///@}
 /**
- *  @brief  Structure used to navigate the allocation tree
+ *  @brief  Pools info
+    uint32_t    minsize;
+    uint32_t    totalsize;
+    uint32_t    mapsize;
+    uint32_t    treesize;
+    BV_TYPE     used;
+    BV_TYPE     split;
+    void        *base;
+    char        *map;
+ */
+
+BUDDY_REGION region[BUDDY_REGIONS_N] = {
+    /* 0 */  { TOTALSIZE, MINSIZE, MAPSIZE, TREESIZE, used, split, (void *) BASE , map },
+    /* 1 */  { 0 },
+    /* 2 */  { 0 },
+    /* 3 */  { 0 }
+};
+
+/**
+ *  @brief  Structure region[r].used to navigate the allocation tree
  */
 
 typedef struct {
@@ -86,39 +130,72 @@ typedef struct {
  *  @brief  buddy_init
  */
 void
-buddy_init(void) {
+buddy_config(int r, uint32_t totalsize, uint32_t minsize, void *base,
+                    BV_TYPE *used, BV_TYPE *split, char *map) {
 
-    bv_clearall(used,MAPSIZE*2);
-    bv_clearall(split,MAPSIZE*2);
+    if( r >= BUDDY_REGIONS_N )
+        return;
+#define TOTALSIZE       8388608                         ///< Size of region = 8 MB
+#define MINSIZE         262144                          ///< Minimal block size = 1 KB
+#define MAPSIZE         (TOTALSIZE/MINSIZE)             ///< Number of blocks
+#define TREESIZE        (MAPSIZE*2-1)                   ///< Number of elements in the tree
+#define BASE            (0xC000000)
+
+    region[r].totalsize = totalsize;
+    region[r].minsize   = minsize;
+    region[r].mapsize   = totalsize/minsize;
+    region[r].treesize  = region[r].mapsize*2-1;
+
+    region[r].used      = used;
+    region[r].split     = split;
+
+    region[r].base      = base;
+    region[r].map       = map;
+}
+
+
+/**
+ *  @brief  buddy_init
+ */
+void
+buddy_init_ex(int r) {
+
+    if( r >= BUDDY_REGIONS_N )
+        return;
+    bv_clearall(region[r].used,region[r].treesize);
+    bv_clearall(region[r].split,region[r].treesize);
 }
 
 /**
  *  @brief  buddy_alloc
  */
 void *
-buddy_alloc(unsigned size) {
+buddy_alloc_ex(int r, unsigned size) {
 int level;
 int s;
 int k;
 int l;
 uint32_t a;
 
-nodeinfo stack[MAPSIZE];
+nodeinfo stack[region[r].mapsize];
 int sp;
 nodeinfo node;
 
+    if( r >= BUDDY_REGIONS_N )
+        return 0;
+
     // Too big?
-    if( size > BUDDYTOTALSIZE )
+    if( size > region[r].totalsize )
         return 0;
 
     // Already full
-    if( bv_test(used,0) )
+    if( bv_test(region[r].used,0) )
         return 0;
 
     sp = 0;
     stack[sp].level = 0;
     stack[sp].index = 0;
-    stack[sp].size = BUDDYTOTALSIZE;
+    stack[sp].size = region[r].totalsize;
     stack[sp].addr = 0;
     sp++;
 
@@ -130,24 +207,24 @@ nodeinfo node;
         a = node.addr;
         l = node.level;
 
-        // test if block already used
-        if( bv_test(used,k) )
+        // test if block already region[r].used
+        if( bv_test(region[r].used,k) )
             continue;
         // test if need full block
-        if( (size > s/2) || (s == BUDDYMINSIZE) ) {
-            // if already split, try another block
-            if( bv_test(split,k) == 0 ) {
+        if( (size > s/2) || (s == region[r].minsize) ) {
+            // if already region[r].split, try another block
+            if( bv_test(region[r].split,k) == 0 ) {
                 // reserve it
-                bv_set(used,k);
-                return (void *) ((char *) BUDDYBASE+a);
+                bv_set(region[r].used,k);
+                return (void *) ((char *) region[r].base+a);
             }
         }
         s /= 2;
         if( size > s )
             continue;
 
-        // Mark as split
-        bv_set(split,k);
+        // Mark as region[r].split
+        bv_set(region[r].split,k);
         // Try left and right leaves.
         l++;
         //Left must be on top of stack
@@ -171,22 +248,25 @@ static inline int iseven(int n) { return (n&1)^1; }
 /**
  *  @brief  buddy_free
  */
-void buddy_free(void *addr) {
-uint32_t disp = (char *) addr - (char *)BUDDYBASE;       // 4 GB limit
+void buddy_free_ex(int r, void *addr) {
+uint32_t disp = (char *) addr - (char *)region[r].base;       // 4 GB limit
 int b,d,k,p;
 
-    d = disp/BUDDYMINSIZE;
+    if( r >= BUDDY_REGIONS_N )
+        return;
 
-    k = MAPSIZE+d-1;
+    d = disp/region[r].minsize;
+
+    k = region[r].mapsize+d-1;
     // Free if it is not
-    bv_clear(used,k);
-    bv_clear(split,k);
+    bv_clear(region[r].used,k);
+    bv_clear(region[r].split,k);
     // Find block to be freed
     while( k > 0 ) {
             k /= 2;
-        if( bv_test(used,k) ) {
-            bv_clear(used,k);
-            bv_clear(split,k);
+        if( bv_test(region[r].used,k) ) {
+            bv_clear(region[r].used,k);
+            bv_clear(region[r].split,k);
             break;
         }
     }
@@ -198,9 +278,9 @@ int b,d,k,p;
             b = k+1;
         else
             b = k-1;
-        if( (bv_test(used,k)==0)&&(bv_test(used,b)==0)&&(bv_test(split,k)==0)&&(bv_test(split,b))) {
+        if( (bv_test(region[r].used,k)==0)&&(bv_test(region[r].used,b)==0)&&(bv_test(region[r].split,k)==0)&&(bv_test(region[r].split,b))) {
             p = k/2;
-            bv_clear(split,p);
+            bv_clear(region[r].split,p);
         }
         k /= 2;
     }
@@ -214,14 +294,22 @@ int b,d,k,p;
  *  @brief  fillmap
  */
 void
-fillmap(char *m,int start, int end, char c) {
+fillmap_ex(int r, int start, int end, char c) {
 int i;
 
+int b,d,k,p;
+
+    if( r >= BUDDY_REGIONS_N )
+        return;
+
+    if( !region[r].map )
+        return;
+
     for(i=start;i<end;i++) {
-        if( c == '-' || m[i] == '-' )
-            m[i] = c;
+        if( c == '-' || region[r].map[i] == '-' )
+            region[r].map[i] = c;
         else
-            m[i] = '*';
+            region[r].map[i] = '*';
     }
 
 }
@@ -231,22 +319,28 @@ int i;
  *  @brief  buildmap
  */
 void
-buildmap(char *m) {
+buildmap_ex(int r) {
 int level;
 int s;
 int k;
 int l;
 uint32_t a;
-nodeinfo stack[MAPSIZE];
+nodeinfo stack[region[r].mapsize];                  // C99 Only
 int sp;
 nodeinfo node;
 
-    fillmap(m,0,MAPSIZE,'-');
+    if( r >= BUDDY_REGIONS_N )
+        return;
+
+    if( !region[r].map )
+        return;
+
+    fillmap_ex(r,0,region[r].mapsize,'-');
 
     sp = 0;
     stack[sp].level = 0;
     stack[sp].index = 0;
-    stack[sp].size = BUDDYTOTALSIZE/BUDDYMINSIZE;
+    stack[sp].size = region[r].totalsize/region[r].minsize;
     stack[sp].addr = 0;
     sp++;
 
@@ -257,9 +351,9 @@ nodeinfo node;
         s = node.size;
         a = node.addr;
         l = node.level;
-        // test if block already used
-        if( bv_test(used,k) ) {
-            fillmap(m,a,a+s,'U');
+        // test if block already region[r].used
+        if( bv_test(region[r].used,k) ) {
+            fillmap_ex(r,a,a+s,'U');
         }
 
         if( s == 1 )
@@ -282,22 +376,26 @@ nodeinfo node;
 
     }
 
-    m[MAPSIZE] = '\0';
+    region[r].map[region[r].mapsize] = '\0';
 }
 
 
 /**
  *  @brief  print allocation map
  */
-void buddy_printmap(void) {
-char map[MAPSIZE+1];
-    buildmap(map);
-    printf("|%s|\n",map);
+void
+buddy_printmap_ex(int r) {
+//char map[region[r].mapsize+1];          // Only C99
+
+    if( r >= BUDDY_REGIONS_N )
+        return;
+    buildmap_ex(r);
+    printf("|%s|\n",region[r].map);
 }
 
 
 
-void buddy_printaddresses(void) {
+void buddy_printaddresses_ex(int r) {
 int level;
 int k;
 int lim;
@@ -305,12 +403,15 @@ uint32_t addr;
 uint32_t size;
 int delta;
 
+    if( r >= BUDDY_REGIONS_N )
+        return;
+
     level = 0;
-    size = BUDDYTOTALSIZE;
+    size = region[r].totalsize;
     lim = 0;
     addr = 0;
     delta = 1;
-    for(k=0;k<TREESIZE;k++) {
+    for(k=0;k<region[r].treesize;k++) {
         printf("level = %-2d node = %-3d address = %08X  size=%08X\n",level,k,addr,size);
         if( k == lim ) {
             level++;
