@@ -30,6 +30,18 @@ The allocation process is O(log_2 N) and does not need to access the free area (
 
 Just for illustration, the whole information about allocation in the above example is containded in two 32 bit integers.
 
+The routines have the following API:
+
+* buddy_init()
+  Initializes the allocation tree
+
+* buddy_alloc(uint32_t size)
+  Returns the pointer to a block if one free block can be found. Otherwise, 
+  returns NULL
+
+* buddy_free(void *p)
+  Returns the pointed block to the free list
+
 
 
 ## Bit vector manipulation code
@@ -60,7 +72,8 @@ There is the alternative to the inline routines: use macros. Thery are enable by
     BV_TEST(X,BIT)
 
 
-##References
+## References
+
 [1]	Kenneth C. Knowlton. A Fast storage allocator. Communications of the ACM 8(10):623–625, Oct 1965.
 
 [2] Donald E. Knuth. Fundamental Algorithms, Volume 1, The Art of Computer Pro-
