@@ -42,6 +42,19 @@ The routines have the following API:
 * buddy_free(void *p)
   Returns the pointed block to the free list
 
+The *multipleregions* version added the following routines:
+
+* buddy_init_ex(int r)
+  Initializes the allocation tree for region r
+
+* buddy_alloc_ex(int r, uint32_t size)
+  Returns the pointer to a block if one free block can be found. Otherwise, 
+  returns NULL
+
+* buddy_free_ex(int r, void *p)
+  Returns the pointed block to the free list
+  
+The standard routines uses the region 0.
 
 
 ## Bit vector manipulation code
