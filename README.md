@@ -11,6 +11,8 @@ The allocator builds a binary tree and allocates contiguous blocks to attend a d
 
 At the lowest level, there are the nodes with information about the 1024 KBytes blocks. One level above, about the 2048. At the next level, 4096 and so on. At the top level, there is the node with information about the whole memory area
 
+There is a branch called *multipleregions* with a version of this routine that handles multiple regions of memory.
+
 ## Using bitmap
 
 Instead of using linked lists, this implementation associates two bit to each node in the binary tree. One bit, called *used*, is set when the correspoding area is allocated. THe other bit, *split*, is set when a block is divided and one subordinated block is allocated.
@@ -29,6 +31,18 @@ The dimension of these bit vectores is 2*N, where N is the number of block at th
 The allocation process is O(log_2 N) and does not need to access the free area (avoiding problems in systems with virtual memory).
 
 Just for illustration, the whole information about allocation in the above example is containded in two 32 bit integers.
+
+The routines have the following API:
+
+* buddy_init()
+  Initializes the allocation tree
+
+* buddy_alloc(uint32_t size)
+  Returns the pointer to a block if one free block can be found. Otherwise, 
+  returns NULL
+
+* buddy_free(void *p)
+  Returns the pointed block to the free list
 
 
 
@@ -59,7 +73,8 @@ There is the alternative to the inline routines: use macros. Thery are enable by
     BV_CLEAR(X,BIT)
     BV_TEST(X,BIT)
 
-##References
+## References
+
 [1]	Kenneth C. Knowlton. A Fast storage allocator. Communications of the ACM 8(10):623–625, Oct 1965.
 
 [2] Donald E. Knuth. Fundamental Algorithms, Volume 1, The Art of Computer Pro-
