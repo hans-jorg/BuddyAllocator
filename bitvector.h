@@ -81,10 +81,10 @@ bv_index(int bit) {
  */
 static inline int
 bv_bit(int bit) {
-    return bit&BV_BIT(bit);
+    return bit&BV_BITMASK;
 }
 /**
- *  @brief  bv_bit
+ *  @brief  bv_mask
  *
  *  @note   returns a BV_TYPE bit mask where the bit corresponding to BIT is set
  */
@@ -120,6 +120,8 @@ bv_test(bv_type v, int bit) {
 int i = bv_index(bit);
     return v[i] & bv_mask(bit);
 }
+
+
 /**
  *  @brief  bv_setall
  *
@@ -132,6 +134,7 @@ int i;
         v[i] = (unsigned) -1;
     }
 }
+
 
 /**
  *  @brief  bv_clearall
@@ -146,6 +149,7 @@ int i;
     }
 }
 
+
 /**
  *  @brief  bv_toggleall
  *
@@ -159,11 +163,14 @@ int i;
     }
 }
 
+
 #ifdef DEBUG
 #ifdef BV_ENABLEMACROS
 /// Call bv_dump. Complex instructions are generally not inlined
 #define BV_DUMP(X,SIZE)  bv_dump((X),(SIZE))
 #endif
+
+
 /**
  *  @brief  bv_index
  *
@@ -177,8 +184,8 @@ int i;
         printf("%03d: %08X\n",i,(unsigned) x[i]);
     }
 }
-
 #endif
+
 
 /**
  *  @brief  Macro to create a bit vector area
@@ -186,6 +193,4 @@ int i;
 
 #define BV_DECLARE(X,SIZE) \
         BV_TYPE X[BV_SIZE(SIZE)]
-
-
 #endif
